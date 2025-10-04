@@ -20,6 +20,14 @@
     position: relative;
     background: transparent;
 }
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.analytics-loading-spinner {
+    display: inline-block;
+}
 
 .analytics-board-hidden {
     display: none;

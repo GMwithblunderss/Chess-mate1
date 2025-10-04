@@ -727,6 +727,12 @@ for (let i = actualgrading.length - 1; i >= 0; i--) {
 }
 
 
+
+
+
+
+
+
 export async function handlemovelistPv(mdata, username, sessionUser, startingFen) {
   const chess = new Chess(startingFen);
   const fens = [startingFen];

@@ -69,10 +69,11 @@ const AnalyticsCore = ({ gameData }) => {
     const [customPvFen, setCustomPvFen] = useState(null);
     const [isCustomPv, setIsCustomPv] = useState(false);
     const [pvGrade, setPvGrade] = useState(null);
-const [pvEvaluation, setPvEvaluation] = useState(null);
-const stockfishServiceRef = useRef(null);
+    const [pvEvaluation, setPvEvaluation] = useState(null);
+    const [isPvAnalyzing, setIsPvAnalyzing] = useState(false);
+    const stockfishServiceRef = useRef(null);
 
-const pvBoardRef = useRef(null);
+    const pvBoardRef = useRef(null);
 
     
 
@@ -209,7 +210,8 @@ useEffect(() => {
         const interval = setInterval(() => {
             setpvframe(prev => {
                 const currentpv = pvfen[pvindex - 1] || [];
-                const newFrame = prev < Math.min(13, currentpv.length) ? prev + 1 : prev;
+                const maxFrame = Math.min(13, currentpv.length) - 1;
+                const newFrame = prev < maxFrame ? prev + 1 : prev;
                 if (newFrame === prev) {
                     clearInterval(interval);
                 }
@@ -263,12 +265,16 @@ const handlePvPieceDrop = async ({ sourceSquare, targetSquare, piece }) => {
         setCustomPvFen(newFen);
         setIsCustomPv(true);
         setPvChess(testChess);
+        setIsPvAnalyzing(true);
+        setPvGrade(null);
+        setPvEvaluation(null);
 
         await analyzePvMove(fenBefore, newFen, uciMove);
 
         return true;
     } catch (error) {
         console.error("Error in handlePvPieceDrop:", error);
+        setIsPvAnalyzing(false);
         return false;
     }
 };
@@ -280,6 +286,7 @@ const analyzePvMove = async (fenBefore, fenAfter, uciMove) => {
         const stockfishService = stockfishServiceRef.current;
         if (!stockfishService) {
             console.warn("Stockfish not ready");
+            setIsPvAnalyzing(false);
             return;
         }
 
@@ -360,6 +367,8 @@ const analyzePvMove = async (fenBefore, fenAfter, uciMove) => {
 
     } catch (error) {
         console.error("Error analyzing PV move:", error);
+    } finally {
+        setIsPvAnalyzing(false);
     }
 };
 
@@ -388,6 +397,9 @@ const showtactic = () => {
         setpvframe(0);
         setmainboard("none");
         setIsCustomPv(false);
+        setPvGrade(null);
+        setPvEvaluation(null);
+        setIsPvAnalyzing(false);
         
         const initialPv = pvfen[Count - 1] || [];
         const initialFen = initialPv[0] || new Chess().fen();
@@ -400,6 +412,9 @@ const showtactic = () => {
         setIsCustomPv(false);
         setCustomPvFen(null);
         setPvChess(null);
+        setPvGrade(null);
+        setPvEvaluation(null);
+        setIsPvAnalyzing(false);
     }
     setpvtrying(prev => !prev);
 };
@@ -411,6 +426,9 @@ const increase = () => {
         if (pvframe < maxFrame) {
             setpvframe(pvframe + 1);
             setIsCustomPv(false);
+            setPvGrade(null);
+            setPvEvaluation(null);
+            setIsPvAnalyzing(false);
         }
     } else {
         if (Count < derivedData.fens.length - 1) {
@@ -424,6 +442,9 @@ const decrease = () => {
         if (pvframe > 0) {
             setpvframe(pvframe - 1);
             setIsCustomPv(false);
+            setPvGrade(null);
+            setPvEvaluation(null);
+            setIsPvAnalyzing(false);
         }
     } else {
         if (Count > 0) {
@@ -436,6 +457,9 @@ const reset = () => {
     if (pvtrying) {
         setpvframe(0);
         setIsCustomPv(false);
+        setPvGrade(null);
+        setPvEvaluation(null);
+        setIsPvAnalyzing(false);
     } else {
         setCount(0);
     }
@@ -553,39 +577,70 @@ const pvoptions = {
             <footer>{whiteuname}</footer>
         </div>
         
-        {isCustomPv && pvGrade && pvChess && (() => {
+        {isCustomPv && pvChess && (() => {
             const history = pvChess.history({ verbose: true });
             if (history.length === 0) return null;
             
             const lastMove = history[history.length - 1];
             const square = lastMove.to;
-            const grade = pvGrade;
-            const Icon = iconMap[grade];
-            
-            if (!square || !Icon) return null;
             
             const iconSize = 0.05 * pvBoardSize;
             const { left, top } = squareCornerPosition(square, pvBoardSize, iconSize, "top-left");
             
-            return (
-                <div
-                    className="analytics-icon-container"
-                    style={{
-                        left: left,
-                        top: top,
-                        width: iconSize,
-                        height: iconSize,
-                        position: 'absolute'
+            if (isPvAnalyzing) {
+                return (
+                    <div
+                        className="analytics-icon-container"
+                        style={{
+                            left: left,
+                            top: top,
+                            width: iconSize,
+                            height: iconSize,
+                            position: 'absolute'
+                        }}
+                    >
+                        <div 
+                            className="analytics-loading-spinner"
+                    style={{ 
+                        width: iconSize*0.8, 
+                        height: iconSize*0.8,
+                        border: `${Math.max(2,iconSize*0.8 * 0.15)}px solid rgba(255, 255, 255, 0.3)`,
+                        borderTop: `${Math.max(2, iconSize*0.8 * 0.15)}px solid white`,
+                        borderRadius: '50%',
+                        animation: 'spin 1s linear infinite',
+                        boxSizing: 'border-box'
                     }}
-                >
-                    {showIcon && (
-                        <Icon 
-                            className="analytics-move-icon-svg" 
-                            style={{ width: iconSize, height: iconSize }} 
                         />
-                    )}
-                </div>
-            );
+                    </div>
+                );
+            }
+            
+            if (pvGrade) {
+                const Icon = iconMap[pvGrade];
+                if (!Icon) return null;
+                
+                return (
+                    <div
+                        className="analytics-icon-container"
+                        style={{
+                            left: left,
+                            top: top,
+                            width: iconSize,
+                            height: iconSize,
+                            position: 'absolute'
+                        }}
+                    >
+                        {showIcon && (
+                            <Icon 
+                                className="analytics-move-icon-svg" 
+                                style={{ width: iconSize, height: iconSize }} 
+                            />
+                        )}
+                    </div>
+                );
+            }
+            
+            return null;
         })()}
     </div>
 )}
