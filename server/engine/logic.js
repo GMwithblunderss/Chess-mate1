@@ -725,3 +725,230 @@ for (let i = actualgrading.length - 1; i >= 0; i--) {
 
   return { bestMoves: bestUciMoves, actualgrading, blackACPL, whiteACPL, blackrating, whiterating, userevals, diffed, grademovenumbers, userwinpercents, blackgradeno, pvfen, booknames };
 }
+
+
+export async function handlemovelistPv(mdata, username, sessionUser, startingFen) {
+  const chess = new Chess(startingFen);
+  const fens = [startingFen];
+  
+  for (const move of mdata) {
+    try {
+      chess.move(move);
+      fens.push(chess.fen());
+    } catch (err) {
+      console.warn("Invalid move:", move, err.message);
+      fens.push(null);
+    }
+  }
+  
+  sessionUser.chess = chess;
+  const API_URL = process.env.APP_API_URL;
+
+  const res = await fetch(`${API_URL}/getPvAnalysis?username=${encodeURIComponent(username)}`, {
+    method: "GET",
+    headers: { "Content-Type": "application/json" }
+  });
+  
+  const { results, bestresults } = await res.json();
+  const bestMovesobj = results;
+
+  const bestMovesRaw = bestMovesobj.map(r => r?.analysis?.bestmove || null);
+  const pvhistoryRaw = bestMovesobj.map(r => r?.analysis?.pvhistory || null);
+  const evalcp = bestMovesobj.map(r => r?.analysis?.evalCp ?? null);
+  let userevals = [...evalcp];
+  const bestEvalcp = bestresults.map(r => r?.analysis?.evalCp ?? null);
+  let bestevalcp = [...bestEvalcp];
+
+  function sanToUciMoves(movesSan) {
+    const tmpChess = new Chess(startingFen);
+    const uciMoves = [];
+    for (const san of movesSan) {
+      try {
+        const move = tmpChess.move(san);
+        if (move) uciMoves.push(move.from + move.to + (move.promotion || ""));
+        else console.warn("Invalid SAN:", san);
+      } catch (e) {
+        console.warn("Invalid SAN:", san);
+      }
+    }
+    return uciMoves;
+  }
+
+  mdata = sanToUciMoves(mdata);
+
+  let diff = [];
+  let diffed = [];
+
+  for (let i = 0; i < userevals.length; i++) {
+    if (typeof userevals[i + 1] === "number" && typeof bestevalcp[i] === "number") {
+      const differ = Math.abs(bestevalcp[i] - userevals[i + 1]);
+      diff.push(differ);
+      diffed.push(differ);
+    } else if (typeof userevals[i + 1] === "string" && typeof bestevalcp[i] === "number") {
+      diff.push(bestevalcp[i]);
+    } else {
+      diff.push(null);
+      diffed.push(null);
+    }
+  }
+
+  let pvfen = [];
+  for (let i = 0; i < pvhistoryRaw.length; i++) {
+    const pvchess = new Chess(fens[i] || startingFen);
+    const pvline = Array.isArray(pvhistoryRaw[i]) ? pvhistoryRaw[i] : [];
+    const thisLineFens = [pvchess.fen()];
+    for (const move of pvline) {
+      try {
+        const applied = pvchess.move(move);
+        if (applied) thisLineFens.push(pvchess.fen());
+      } catch (err) {}
+    }
+    pvfen.push(thisLineFens);
+  }
+
+  const userwinpercents = userevals.map(cp => {
+    if (typeof cp === "number") return getWinPercentageFromCp(cp);
+    if (typeof cp === "string" && cp.startsWith("mate in")) {
+      const mateValue = parseInt(cp.split(" ")[2], 10);
+      return mateValue > 0 ? 100 : 0;
+    }
+    return null;
+  });
+
+  const isWhiteToMove = startingFen.split(' ')[1] === 'w';
+
+  for (let i = 0; i < userwinpercents.length; i++) {
+    if (userwinpercents[i] !== null) {
+      const positionIsWhiteToMove = (i === 0) ? isWhiteToMove : !isWhiteToMove;
+      if (!positionIsWhiteToMove) {
+        userwinpercents[i] = 100 - userwinpercents[i];
+      }
+    }
+  }
+
+  const pvUciHistory = pvhistoryRaw.map((pv, idx) => {
+    const startFen = fens[idx] || startingFen;
+    const g = new Chess(startFen);
+    const line = Array.isArray(pv) ? pv : [];
+    const uci = [];
+    for (const mv of line) {
+      if (!mv) break;
+      if (isUciMove(mv)) {
+        try { g.move({ from: mv.slice(0, 2), to: mv.slice(2, 4), promotion: mv[4] }); }
+        catch (e) { break; }
+        uci.push(mv);
+      } else {
+        try {
+          const applied = g.move(mv);
+          if (!applied) break;
+          uci.push(applied.from + applied.to + (applied.promotion || ""));
+        } catch (e) { break; }
+      }
+    }
+    return uci;
+  });
+
+  const bestUciMoves = bestMovesRaw.map((mv, idx) => {
+    if (!mv) return null;
+    if (isUciMove(mv)) return mv;
+    const startFen = fens[idx] || startingFen;
+    const g = new Chess(startFen);
+    try {
+      const applied = g.move(mv);
+      if (applied) return applied.from + applied.to + (applied.promotion || "");
+    } catch (e) {}
+    return null;
+  });
+
+  const actualgrading = [];
+  let mateThreatActive = false;
+  
+  for (let i = 1; i < userevals.length; i++) {
+    try {
+      const fenBefore = fens[i - 1];
+      const playedMove = mdata[i - 1];
+      const bestLine = pvUciHistory[i - 1] || [];
+
+      const lastWin = userwinpercents[i - 1] || 50;
+      const currentWin = userwinpercents[i] || 50;
+
+      const sacrificeResult = getIsPieceSacrifice(fenBefore, playedMove, bestLine);
+      const defensiveResult = isDefensiveMove(fenBefore, playedMove);
+      const previousMoveCheck = canBeBrilliantAfterMistake(actualgrading, i-1);
+      const forcedKingMove = isForcedKingMove(fenBefore, playedMove);
+      const onlyMove = isOnlyLegalMove(fenBefore);
+      const winPercentCheck = meetsMinimumWinPercent(currentWin);
+      const directForkResponse = isDirectForkResponse(fenBefore, playedMove);
+      const blockForFork = directForkResponse.isDirectForkResponse;
+      const isSacrifice = sacrificeResult.isSacrifice && !defensiveResult.isDefensive;
+      const winDropOk = lastWin - currentWin >= -1.5;
+
+      function skipBrilliant(winPercentBefore, winPercentAfter) {
+        if (winPercentBefore <= 15 || winPercentBefore >= 85) return true;
+        if (winPercentAfter <= 15 || winPercentAfter >= 85) return true;
+        return false;
+      }
+      
+      const skipbrilliant = skipBrilliant(lastWin, currentWin);
+      
+      if (isSacrifice && winDropOk && !skipbrilliant && previousMoveCheck.canBeBrilliant && !forcedKingMove.isForcedKingMove && !onlyMove.isOnlyMove && winPercentCheck.meetsMinimum && !blockForFork) {
+        actualgrading[i-1] = "Brilliant";
+      }
+
+      if (typeof bestevalcp[i - 1] === "string" && bestevalcp[i - 1].startsWith("mate in")) {
+        if (!mateThreatActive && i - 2 >= 0) {
+          actualgrading[i - 2] = "Mate";
+        }
+        mateThreatActive = true;
+      }
+
+      if (typeof userevals[i] === "string" && userevals[i].startsWith("mate in")) {
+        const mateValue = parseInt(userevals[i].split(" ")[2], 10);
+        actualgrading[i - 1] = mateValue > 0 ? "Mate" : "Lost Mate";
+      }
+
+      if (mateThreatActive && Math.abs(userevals[i]) < 50) {
+        mateThreatActive = false;
+      }
+
+      const cpDiff = typeof bestevalcp[i - 1] === "number" && typeof userevals[i] === "number"
+        ? Math.abs(bestevalcp[i - 1] - userevals[i])
+        : Infinity;
+
+      const gradingValue = cpDiff;
+
+      if (!actualgrading[i - 1]) {
+        if (gradingValue >= 300) {
+          actualgrading[i - 1] = "Blunder";
+        }
+        else if (gradingValue >= 200) {
+          actualgrading[i - 1] = "Mistake";
+        }
+        else if (gradingValue >= 100) {
+          actualgrading[i - 1] = "Inaccuracy";
+        }
+        else if (gradingValue >= 35) {
+          actualgrading[i - 1] = "Okay";
+        }
+        else if (gradingValue >= 5) {
+          actualgrading[i - 1] = "Good";
+        }
+        else {
+          actualgrading[i - 1] = "Best";
+        }
+      }
+      
+    } catch (error) {
+      console.log("error grading PV move", error);
+    }
+  }
+
+  for (let i = 0; i < mdata.length; i++) {
+    const nextMove = mdata[i + 1];
+    if (nextMove && bestUciMoves[i] === nextMove && actualgrading[i] !== "Great" && actualgrading[i] !== "Brilliant") {
+      actualgrading[i] = "Best";
+    }
+  }
+
+  return { bestMoves: bestUciMoves, actualgrading, userevals, diffed, userwinpercents, pvfen };
+}

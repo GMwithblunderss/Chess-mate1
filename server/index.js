@@ -6,7 +6,7 @@
     import { fileURLToPath } from 'url';
     import { data } from 'react-router-dom';
     import { Chess } from 'chess.js';
-    import { handlemovelist } from './engine/logic.js';
+    import { handlemovelist,handlemovelistPv } from './engine/logic.js';
     import stats from './engine/stats.js';
     import { createProxyMiddleware } from 'http-proxy-middleware';
     //import dotenv from 'dotenv'
@@ -61,7 +61,8 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
         chess: new Chess(),
         bestanalysis: [],
         storedanalysisUser :[],
-        cachedPGNDatauser: null
+        cachedPGNDatauser: null,
+        storedanalysisPv: null
         };
     }
     return sessions[username];
@@ -262,54 +263,66 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 
 
+app.post("/wasmResultsPv", async (req, res) => {
+    const { username } = req.body;
+    const sessionUser = getUserSession(username);
+    sessionUser.storedanalysisPv = req.body;
+    console.log("POST /wasmResultsPv hit", username);
+    res.json({ status: "ok" });
+})
 
 
-
-
-    app.post('/realtimepvupdate', async (req, res) => {
-  const { username, fen, moves } = req.body;
-  if (!username || !fen || !Array.isArray(moves)) {
-    return res.status(400).json({ error: 'Missing required data' });
-  }
-
-  const sessionUser = getUserSession(username);
-  const chess = new Chess(fen);
-
-  try {
-    for (const move of moves) {
-      if (!chess.move(move)) {
-        return res.status(400).json({ error: 'Invalid move in moves list' });
-      }
-    }
-  } catch {
-    return res.status(400).json({ error: 'Invalid chess moves or FEN' });
-  }
-
-  sessionUser.pvMoves = moves;
-  sessionUser.pvFen = fen;
-
-  try {
-    const analysis = await handlemovelist(
-      moves,
-      username,
-      sessionUser,
-      { customPVMode: true, startingFen: fen }
-    );
-
-    sessionUser.cachedPVAnalysis = analysis;
-
-    res.json({
-      bestmoves: analysis.bestMoves,
-      actualgrading: analysis.actualgrading,
-      grademovenumbers: analysis.grademovenumbers,
-      userwinpercents: analysis.userwinpercents,
-      pvfen: analysis.pvfen,
-      booknames: analysis.booknames
+function waitForPvResults(sessionUser, intervalMs = 500) {
+    return new Promise((resolve) => {
+        const check = () => {
+            if (sessionUser.storedanalysisPv?.results?.length > 0) {
+                return resolve(sessionUser.storedanalysisPv);
+            }
+            setTimeout(check, intervalMs);
+        };
+        check();
     });
-  } catch (err) {
-    res.status(500).json({ error: 'Analysis failed' });
-  }
+}
+
+
+app.get("/getPvAnalysis", async (req, res) => {
+    try {
+        const uname = req.query.username;
+        const sessionUser = getUserSession(uname);
+        const analysis = await waitForPvResults(sessionUser);
+        res.json(analysis);
+    } catch (err) {
+        console.error("Error in /getPvAnalysis:", err.message);
+        res.status(500).json({ error: err.message });
+    }
 });
+
+app.post("/gradePvMove", async (req, res) => {
+    const { username, playedMove, fenBefore } = req.body;
+    const sessionUser = getUserSession(username);
+    
+    try {
+        await waitForPvResults(sessionUser);
+        
+        const result = await handlemovelistPv([playedMove], username, sessionUser, fenBefore);
+        
+        // Clear PV analysis after grading to prevent stale data
+        sessionUser.storedanalysisPv = null;
+        
+        res.json({
+            grade: result.actualgrading[0],
+            evaluation: result.userevals[1],
+            bestMove: result.bestMoves[0],
+            userwinpercents: result.userwinpercents
+        });
+        
+    } catch (error) {
+        console.error("Error grading PV move:", error);
+        res.status(500).json({ error: "Failed to grade move" });
+    }
+});
+
+
 
 
 

@@ -10,6 +10,8 @@ import GameSummaryBox from "../components/startingevals.jsx";
 import "./pages-css/analyse.css"; 
 import AnsidebarHorizontal from "../components/horizontalansidebar.jsx";
 import UniqueSidebars from "../components/verticalsidebar.jsx";
+import { prewarmStockfish } from '../wasmanalysis.js';
+import { API_URL } from '../pathconfig.js';
 
 const Analytics = () => {
     const location = useLocation();
@@ -58,6 +60,7 @@ const AnalyticsCore = ({ gameData }) => {
     const [pvframe, setpvframe] = useState(0);
     const [savedCount, setSavedCount] = useState(0); 
     const [boardSize, setBoardSize] = useState(640);
+    const [pvBoardSize, setPvBoardSize] = useState(640);
     const [windowWidth, setWindowWidth] = useState(window.innerWidth);
     const [reviewStarted, setReviewStarted] = useState(false);
     const [whiteuname, setwhiteuname] = useState("White Player");
@@ -65,6 +68,12 @@ const AnalyticsCore = ({ gameData }) => {
     const [pvChess, setPvChess] = useState(null);
     const [customPvFen, setCustomPvFen] = useState(null);
     const [isCustomPv, setIsCustomPv] = useState(false);
+    const [pvGrade, setPvGrade] = useState(null);
+const [pvEvaluation, setPvEvaluation] = useState(null);
+const stockfishServiceRef = useRef(null);
+
+const pvBoardRef = useRef(null);
+
     
 
     const boardRef = useRef(null);
@@ -112,6 +121,12 @@ const AnalyticsCore = ({ gameData }) => {
         return () => clearTimeout(timer);
     }, []);
 
+useEffect(() => {
+    const initStockfish = async () => {
+        stockfishServiceRef.current = await prewarmStockfish();
+    };
+    initStockfish();
+}, []);
 
 
 useEffect(() => {
@@ -127,6 +142,15 @@ useEffect(() => {
 
     }
 }, [pvtrying, pvindex, pvframe, pvfen]);
+
+useEffect(() => {
+    if (!pvBoardRef.current || !pvtrying) return;
+    const observer = new ResizeObserver(entries => {
+        setPvBoardSize(entries[0].contentRect.width);
+    });
+    observer.observe(pvBoardRef.current);
+    return () => observer.disconnect();
+}, [pvtrying]);
 
 
 
@@ -214,13 +238,14 @@ useEffect(() => {
 
 
 
-const handlePvPieceDrop = ({ sourceSquare, targetSquare, piece }) => {
+const handlePvPieceDrop = async ({ sourceSquare, targetSquare, piece }) => {
     if (!pvChess) {
         return false;
     }
 
     try {
-        const testChess = new Chess(pvChess.fen());
+        const fenBefore = pvChess.fen();
+        const testChess = new Chess(fenBefore);
         
         const move = testChess.move({
             from: sourceSquare,
@@ -233,19 +258,110 @@ const handlePvPieceDrop = ({ sourceSquare, targetSquare, piece }) => {
         }
         
         const newFen = testChess.fen();
+        const uciMove = move.from + move.to + (move.promotion || '');
         
         setCustomPvFen(newFen);
         setIsCustomPv(true);
         setPvChess(testChess);
 
+        await analyzePvMove(fenBefore, newFen, uciMove);
+
         return true;
     } catch (error) {
+        console.error("Error in handlePvPieceDrop:", error);
         return false;
     }
 };
 
+const analyzePvMove = async (fenBefore, fenAfter, uciMove) => {
+    const username = localStorage.getItem("currentUser");
+    
+    try {
+        const stockfishService = stockfishServiceRef.current;
+        if (!stockfishService) {
+            console.warn("Stockfish not ready");
+            return;
+        }
 
 
+
+        const analysisBefore = await stockfishService.analyzeFen(fenBefore, { depth: 15 });
+        
+        const analysisAfter = await stockfishService.analyzeFen(fenAfter, { depth: 15 });
+        
+        const bestmove = analysisBefore?.bestmove;
+        let bestFen = null;
+        let bestAnalysis = null;
+        
+        if (bestmove) {
+            const chessForBest = new Chess(fenBefore);
+            const bestMoveResult = chessForBest.move({
+                from: bestmove.slice(0, 2),
+                to: bestmove.slice(2, 4),
+                promotion: bestmove[4] || 'q'
+            });
+            
+            if (bestMoveResult) {
+                bestFen = chessForBest.fen();
+                bestAnalysis = await stockfishService.analyzeFen(bestFen, { depth: 15 });
+               
+            }
+        }
+
+        const fens = [fenBefore, fenAfter];
+        const results = [
+            { fen: fenBefore, analysis: analysisBefore },
+            { fen: fenAfter, analysis: analysisAfter }
+        ];
+        const bestfens = [bestFen];
+        const bestresults = [
+            bestFen ? { fen: bestFen, analysis: bestAnalysis } : null
+        ];
+
+
+
+        const storeResponse = await fetch(`${API_URL}/wasmResultsPv`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                fens,
+                results,
+                bestfens,
+                bestresults,
+                username
+            }),
+        });
+
+        if (!storeResponse.ok) {
+            throw new Error("Failed to store WASM results");
+        }
+
+
+        await new Promise(resolve => setTimeout(resolve, 200));
+
+        const gradeResponse = await fetch(`${API_URL}/gradePvMove`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                username,
+                playedMove: uciMove,
+                fenBefore
+            }),
+        });
+
+        if (gradeResponse.ok) {
+            const gradeData = await gradeResponse.json();
+            
+            setPvGrade(gradeData.grade);
+            setPvEvaluation(gradeData.evaluation);
+        } else {
+            console.error("Grading failed:", await gradeResponse.text());
+        }
+
+    } catch (error) {
+        console.error("Error analyzing PV move:", error);
+    }
+};
 
 
 
@@ -427,18 +543,52 @@ const pvoptions = {
                             );
                         })()}
                     </div>
-
-                    {pvtrying && (
-                        <div className="analytics-board-container">
-                            <div className="analytics-board-header">
-                                <header>{blackuname}</header>
-                            </div>
-                            <Chessboard options={pvoptions} />
-                            <div className="analytics-board-footer">
-                                <footer>{whiteuname}</footer>
-                            </div>
-                        </div>
+{pvtrying && (
+    <div className="analytics-board-container" ref={pvBoardRef}>
+        <div className="analytics-board-header">
+            <header>{blackuname}</header>
+        </div>
+        <Chessboard options={pvoptions} />
+        <div className="analytics-board-footer">
+            <footer>{whiteuname}</footer>
+        </div>
+        
+        {isCustomPv && pvGrade && pvChess && (() => {
+            const history = pvChess.history({ verbose: true });
+            if (history.length === 0) return null;
+            
+            const lastMove = history[history.length - 1];
+            const square = lastMove.to;
+            const grade = pvGrade;
+            const Icon = iconMap[grade];
+            
+            if (!square || !Icon) return null;
+            
+            const iconSize = 0.05 * pvBoardSize;
+            const { left, top } = squareCornerPosition(square, pvBoardSize, iconSize, "top-left");
+            
+            return (
+                <div
+                    className="analytics-icon-container"
+                    style={{
+                        left: left,
+                        top: top,
+                        width: iconSize,
+                        height: iconSize,
+                        position: 'absolute'
+                    }}
+                >
+                    {showIcon && (
+                        <Icon 
+                            className="analytics-move-icon-svg" 
+                            style={{ width: iconSize, height: iconSize }} 
+                        />
                     )}
+                </div>
+            );
+        })()}
+    </div>
+)}
                 </div>
                 <div className="anbar">
                     {windowWidth > 768 ? (
