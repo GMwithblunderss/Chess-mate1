@@ -1,6 +1,5 @@
 import { supabase, setUserContext } from './supabase.js';
 
-// Get user phase statistics from database
 export const getUserPhaseStats = async (username) => {
   try {
     if (!username) {
@@ -22,7 +21,6 @@ export const getUserPhaseStats = async (username) => {
       throw error;
     }
 
-    // Return data in the exact format the page expects, with fallbacks
     return {
       username: data.username,
       total_games: data.total_games || 0,

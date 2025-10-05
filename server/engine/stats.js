@@ -1,4 +1,5 @@
 import axios from "axios"
+import { supabaseService } from './utils/supabaseservice.js';
 import { supabase, setUserContext } from './utils/supabase.js'
 import { Chess } from "chess.js";
 import { Ecoopenings } from "./ecocompletebaseOpenings.js";
@@ -590,7 +591,7 @@ const saveAnalyticsToSupabase = async (username, analyticsData, gameInfo, moves)
     
     const gameHash = generateGameHash(gameInfo, username, moves);
     
-    const { data: existingGame, error: checkError } = await supabase
+    const { data: existingGame, error: checkError } = await supabaseService
       .from('games')
       .select('id, username')
       .eq('game_hash', gameHash)
@@ -608,7 +609,7 @@ const saveAnalyticsToSupabase = async (username, analyticsData, gameInfo, moves)
       };
     }
     
-    const { data: user, error: userError } = await supabase
+    const { data: user, error: userError } = await supabaseService
       .from('users')
       .upsert({ username: username }, { onConflict: 'username' })
       .select()
@@ -616,7 +617,7 @@ const saveAnalyticsToSupabase = async (username, analyticsData, gameInfo, moves)
 
     if (userError) throw userError;
 
-    const { data: game, error: gameError } = await supabase
+    const { data: game, error: gameError } = await supabaseService
       .from('games')
       .insert({
         user_id: user.id,
@@ -737,7 +738,7 @@ const saveAnalyticsToSupabase = async (username, analyticsData, gameInfo, moves)
       queen_capture_rate: pieceData.queen.captureRate
     };
 
-    const { error: analyticsError } = await supabase
+    const { error: analyticsError } = await supabaseService
       .from('piece_analytics')
       .insert(analyticsInsert);
 
@@ -763,7 +764,7 @@ const updateAggregatedStats = async (username) => {
   try {
     await setUserContext(username);
     
-    const { data: allAnalytics, error } = await supabase
+    const { data: allAnalytics, error } = await supabaseService
       .from('piece_analytics')
       .select('*')
       .eq('username', username)
@@ -773,7 +774,7 @@ const updateAggregatedStats = async (username) => {
     const gameCount = allAnalytics.length
     if (gameCount === 0) return
 
-    const { data: user } = await supabase
+    const { data: user } = await supabaseService
       .from('users')
       .select('id')
       .eq('username', username)
@@ -876,7 +877,7 @@ const updateAggregatedStats = async (username) => {
       queen_avg_center_control: allAnalytics.reduce((sum, a) => sum + (a.queen_center_control || 0), 0) / gameCount
     }
 
-    const { error: upsertError } = await supabase
+    const { error: upsertError } = await supabaseService
       .from('aggregated_stats')
       .upsert(aggregated, { onConflict: 'username' })
 
@@ -891,7 +892,7 @@ const getAggregatedData = async (username) => {
   try {
     await setUserContext(username);
     
-    const { data: stats, error } = await supabase
+    const { data: stats, error } = await supabaseService
       .from('aggregated_stats')
       .select('*')
       .eq('username', username)
@@ -1318,8 +1319,7 @@ const saveOpeningMetrics = async (username, openingName, openingData, gameInfo, 
             return { success: false, error: "Invalid opening data" };
         }
 
-        // Check if this specific game was already processed
-        const { data: existingGameOpening, error: checkError } = await supabase
+        const { data: existingGameOpening, error: checkError } = await supabaseService
             .from('opening_stats')
             .select('*')  // Get all fields
             .eq('username', username)
@@ -1350,7 +1350,6 @@ const saveOpeningMetrics = async (username, openingName, openingData, gameInfo, 
             processed_games: []
         };
 
-        // Calculate new aggregated stats
         const newTotalGames = existingStats.total_games + 1;
         const newTotalWins = existingStats.total_wins + (gameInfo.result === 'win' ? 1 : 0);
         const newTotalWhiteWins = existingStats.total_white_wins + 
@@ -1362,7 +1361,6 @@ const saveOpeningMetrics = async (username, openingName, openingData, gameInfo, 
         const newTotalACPL = existingStats.total_opening_acpl + openingData.avgOpeningCP;
         const newTotalBlunders = existingStats.total_opening_blunders + openingData.openingBlunders;
         
-        // Convert gameId to string and add to processed games
         const newProcessedGames = [...existingStats.processed_games, String(gameId)];
 
         const upsertData = {
@@ -1382,12 +1380,10 @@ const saveOpeningMetrics = async (username, openingName, openingData, gameInfo, 
             win_rate: (newTotalWins / newTotalGames) * 100,
             white_win_rate: newTotalWhiteWins > 0 ? (newTotalWhiteWins / Math.max(1, newTotalGames)) * 100 : 0,
             black_win_rate: newTotalBlackWins > 0 ? (newTotalBlackWins / Math.max(1, newTotalGames)) * 100 : 0,
-            // Remove processed_games temporarily to avoid the error
-            // processed_games: newProcessedGames,
             last_updated: new Date().toISOString()
         };
 
-        const { error: upsertError } = await supabase
+        const { error: upsertError } = await supabaseService
             .from('opening_stats')
             .upsert(upsertData, { 
                 onConflict: 'username,opening_name',
@@ -1471,7 +1467,6 @@ try {
 const calculatePhaseAggregatedStats = (moves, grades, cploss, evals, isWhite,userwinpercents) => {
     const boundaries = getGamePhaseBoundaries(moves);
 
-    // This sub-function is where the fix is applied.
     const getUserMovesInPhases = (moves, grades, cploss, captures, evals, isWhite) => {
         const boundaries = getGamePhaseBoundaries(moves);
         const phases = { opening: [], middlegame: [], endgame: [] };
@@ -1671,7 +1666,7 @@ const calculatePhaseAggregatedStats = (moves, grades, cploss, evals, isWhite,use
 const pushUserPhaseStats = async (username, phaseStats, gameInfo) => {
     try {
         await setUserContext(username);
-        const { data: existing, error: fetchError } = await supabase
+        const { data: existing, error: fetchError } = await supabaseService
             .from('user_phase_stats')
             .select('*')
             .eq('username', username)
@@ -1797,7 +1792,7 @@ const pushUserPhaseStats = async (username, phaseStats, gameInfo) => {
                 last_updated: new Date().toISOString()
             };
         }
-        const { data, error } = await supabase
+        const { data, error } = await supabaseService
             .from('user_phase_stats')
             .upsert(updatedStats, { onConflict: 'username' })
             .select();

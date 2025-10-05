@@ -9,6 +9,8 @@
     import { handlemovelist,handlemovelistPv } from './engine/logic.js';
     import stats from './engine/stats.js';
     import { createProxyMiddleware } from 'http-proxy-middleware';
+    import { heavyLimiter } from './ratelimiter.js';
+
     //import dotenv from 'dotenv'
    // dotenv.config({ path: './backend.env' })
 
@@ -28,7 +30,8 @@
 
 
     const app = express();
-    const PORT = 5000;
+    app.set('trust proxy', 1);
+    const PORT = process.env.port || 5000;
 
     app.use((req, res, next) => {
     res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
@@ -39,34 +42,76 @@
     app.use(cors());
     app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use(
+  [
+    '/username',
+    '/pgn',
+    '/pgnfromuser',
+    '/analyzewithstockfish',
+    '/analyzewithstockfishuser',
+    '/realtimepvupdate'
+  ],
+  heavyLimiter
+);
 
     /*app.get("/", (req, res) => {
         res.send("backend is running ");
     });*/
 
     const sessions = {};
-    const userFiles = {};
+    const SESSION_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
-    function getUserSession(username) {
-    if (!sessions[username]) {
-        sessions[username] = {
-        npg: null,
-        mArray: [],
-        png: null,
-        pnguser :null,
-        pgnfromuserArray: [],
-        statsUser: "",
-        cachedPGNData: null,
-        storedanalysis: [],
-        chess: new Chess(),
-        bestanalysis: [],
-        storedanalysisUser :[],
-        cachedPGNDatauser: null,
-        storedanalysisPv: null
-        };
+setInterval(() => {
+  const cutoff = Date.now() - SESSION_TTL_MS;
+  for (const [uname, sess] of Object.entries(sessions)) {
+    const last = sess.lastAccess || sess.created || 0;
+    if (last < cutoff) {
+      delete sessions[uname];
     }
-    return sessions[username];
-    }
+  }
+}, 10 * 60 * 1000);
+   // const userFiles = {};
+
+
+
+    let lastCallTime = 0;
+const MIN_GAP_MS = 150; 
+
+async function throttledGet(url) {
+  const now = Date.now();
+  const wait = lastCallTime + MIN_GAP_MS - now;
+  if (wait > 0) {
+    await new Promise(r => setTimeout(r, wait));
+  }
+  lastCallTime = Date.now();
+  return axios.get(url);
+}
+
+
+   function getUserSession(username) {
+  if (!sessions[username]) {
+    sessions[username] = {
+      created: Date.now(),
+      lastAccess: Date.now(),
+      npg: null,
+      mArray: [],
+      png: null,
+      pnguser: null,
+      pgnfromuserArray: [],
+      statsUser: "",
+      cachedPGNData: null,
+      storedanalysis: [],
+      chess: new Chess(),
+      bestanalysis: [],
+      storedanalysisUser: [],
+      cachedPGNDatauser: null,
+      storedanalysisPv: null
+    };
+  } else {
+    sessions[username].lastAccess = Date.now();
+  }
+  return sessions[username];
+}
 
     app.post("/username", async (req, res) => {
         const now = new Date();
@@ -89,7 +134,7 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
     }
         
         try {
-        const rep = await axios.get(`https://api.chess.com/pub/player/${uname}/games/${fetchYear}/${fetchMonth.toString().padStart(2,'0')}`);
+        const rep = await throttledGet(`https://api.chess.com/pub/player/${uname}/games/${fetchYear}/${fetchMonth.toString().padStart(2,'0')}`);
             //userFiles[uname] = rep.data;
             console.log("file created succesfully");
             res.json(rep.data);
@@ -180,6 +225,8 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
     check();
   });
 }
+
+
 
 
 

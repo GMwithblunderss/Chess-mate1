@@ -936,7 +936,7 @@ export async function handlemovelistPv(mdata, username, sessionUser, startingFen
         else if (gradingValue >= 35) {
           actualgrading[i - 1] = "Okay";
         }
-        else if (gradingValue >= 5) {
+        else if (gradingValue >= 10) {
           actualgrading[i - 1] = "Good";
         }
         else {
