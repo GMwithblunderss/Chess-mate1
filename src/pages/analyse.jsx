@@ -72,6 +72,8 @@ const AnalyticsCore = ({ gameData }) => {
     const [pvEvaluation, setPvEvaluation] = useState(null);
     const [isPvAnalyzing, setIsPvAnalyzing] = useState(false);
     const stockfishServiceRef = useRef(null);
+    const [lastPvMove, setLastPvMove] = useState(null);
+    const [pvArrows, setPvArrows] = useState([]);
 
     const pvBoardRef = useRef(null);
 
@@ -204,23 +206,39 @@ useEffect(() => {
         }
     }, [Count, derivedData.fromSquares, derivedData.toSquares, pvtrying]);
 
-    useEffect(() => {
-        if (!pvtrying || !pvfen.length) return;
 
-        const interval = setInterval(() => {
-            setpvframe(prev => {
-                const currentpv = pvfen[pvindex - 1] || [];
-                const maxFrame = Math.min(13, currentpv.length) - 1;
-                const newFrame = prev < maxFrame ? prev + 1 : prev;
-                if (newFrame === prev) {
-                    clearInterval(interval);
-                }
-                return newFrame;
-            });
-        }, 800);
-        
-        return () => clearInterval(interval);
-    }, [pvtrying, pvfen, pvindex]);
+useEffect(() => {
+    if (!pvtrying || !pvfen.length || isCustomPv) return;
+
+    const interval = setInterval(() => {
+        setpvframe(prev => {
+            const currentpv = pvfen[pvindex - 1] || [];
+            const maxFrame = Math.min(4, Math.min(13, currentpv.length)) - 1;
+            const newFrame = prev < maxFrame ? prev + 1 : prev;
+            if (newFrame === prev) {
+                clearInterval(interval);
+            }
+            return newFrame;
+        });
+    }, 800);
+    
+    return () => clearInterval(interval);
+}, [pvtrying, pvfen, pvindex, isCustomPv]);
+
+
+
+useEffect(() => {
+    if (!pvtrying) {
+        setPvArrows([]);
+    }
+}, [pvtrying]);
+
+useEffect(() => {
+    if (!isCustomPv) {
+        setPvArrows([]);
+    }
+}, [isCustomPv]);
+
 
     function acplToAccuracy(acpl) {
         const k = 0.005;
@@ -235,6 +253,8 @@ useEffect(() => {
         setCount(value);
         setTimeout(() => setCount(prev => prev + 1), 10);
     };
+
+
 
 
 
@@ -269,6 +289,8 @@ const handlePvPieceDrop = async ({ sourceSquare, targetSquare, piece }) => {
         setPvGrade(null);
         setPvEvaluation(null);
 
+        
+        
         await analyzePvMove(fenBefore, newFen, uciMove);
 
         return true;
@@ -278,6 +300,10 @@ const handlePvPieceDrop = async ({ sourceSquare, targetSquare, piece }) => {
         return false;
     }
 };
+
+
+
+
 
 const analyzePvMove = async (fenBefore, fenAfter, uciMove) => {
     const username = localStorage.getItem("currentUser");
@@ -290,11 +316,18 @@ const analyzePvMove = async (fenBefore, fenAfter, uciMove) => {
             return;
         }
 
-
-
         const analysisBefore = await stockfishService.analyzeFen(fenBefore, { depth: 15 });
-        
         const analysisAfter = await stockfishService.analyzeFen(fenAfter, { depth: 15 });
+        
+        if (analysisAfter?.bestmove && analysisAfter.bestmove.length >= 4) {
+            setPvArrows([{
+                startSquare: analysisAfter.bestmove.substring(0, 2),
+                endSquare: analysisAfter.bestmove.substring(2, 4),
+                color: "green"
+            }]);
+        } else {
+            setPvArrows([]);
+        }
         
         const bestmove = analysisBefore?.bestmove;
         let bestFen = null;
@@ -311,7 +344,6 @@ const analyzePvMove = async (fenBefore, fenAfter, uciMove) => {
             if (bestMoveResult) {
                 bestFen = chessForBest.fen();
                 bestAnalysis = await stockfishService.analyzeFen(bestFen, { depth: 15 });
-               
             }
         }
 
@@ -324,8 +356,6 @@ const analyzePvMove = async (fenBefore, fenAfter, uciMove) => {
         const bestresults = [
             bestFen ? { fen: bestFen, analysis: bestAnalysis } : null
         ];
-
-
 
         const storeResponse = await fetch(`${API_URL}/wasmResultsPv`, {
             method: "POST",
@@ -343,7 +373,6 @@ const analyzePvMove = async (fenBefore, fenAfter, uciMove) => {
             throw new Error("Failed to store WASM results");
         }
 
-
         await new Promise(resolve => setTimeout(resolve, 200));
 
         const gradeResponse = await fetch(`${API_URL}/gradePvMove`, {
@@ -358,7 +387,6 @@ const analyzePvMove = async (fenBefore, fenAfter, uciMove) => {
 
         if (gradeResponse.ok) {
             const gradeData = await gradeResponse.json();
-            
             setPvGrade(gradeData.grade);
             setPvEvaluation(gradeData.evaluation);
         } else {
@@ -429,6 +457,7 @@ const increase = () => {
             setPvGrade(null);
             setPvEvaluation(null);
             setIsPvAnalyzing(false);
+            setPvArrows([]); 
         }
     } else {
         if (Count < derivedData.fens.length - 1) {
@@ -445,6 +474,7 @@ const decrease = () => {
             setPvGrade(null);
             setPvEvaluation(null);
             setIsPvAnalyzing(false);
+            setPvArrows([]); 
         }
     } else {
         if (Count > 0) {
@@ -453,6 +483,7 @@ const decrease = () => {
     }
 };
 
+
 const reset = () => {
     if (pvtrying) {
         setpvframe(0);
@@ -460,11 +491,11 @@ const reset = () => {
         setPvGrade(null);
         setPvEvaluation(null);
         setIsPvAnalyzing(false);
+        setPvArrows([]); 
     } else {
         setCount(0);
     }
 };
-
     const onstartreview = () => {
         setReviewStarted(true);
         setdisplayansidebar("");
@@ -520,6 +551,7 @@ const pvoptions = {
     onPieceDrop: handlePvPieceDrop,
     draggable: true,
     draggingPieceGhostStyle: { opacity: 0 },
+    arrows: pvArrows,
     id: "pv-board"
 };
 

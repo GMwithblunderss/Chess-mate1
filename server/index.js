@@ -39,33 +39,7 @@
     next();
     });
 
-const allowedOrigin = process.env.APP_API_URL && process.env.APP_API_URL.replace(/\/+$/, '');
-
-app.use((req, res, next) => {
-  if (!allowedOrigin) {
-    return cors()(req, res, next);
-  }
-
-  const origin = req.headers.origin && req.headers.origin.replace(/\/+$/, '');
-
-  if (!origin || origin === allowedOrigin) {
-    res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
-    res.setHeader('Vary', 'Origin');
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-    if (req.method === 'OPTIONS') {
-      return res.status(204).end();
-    }
-    return next();
-  }
-
-  if (req.method === 'OPTIONS') {
-    return res.status(403).json({ error: 'CORS: Origin not allowed' });
-  }
-  return res.status(403).json({ error: 'CORS: Origin not allowed' });
-});
-
+app.use(cors());
     app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ limit: '5mb', extended: true }));
 app.use(
@@ -379,7 +353,7 @@ app.post("/gradePvMove", async (req, res) => {
         
         const result = await handlemovelistPv([playedMove], username, sessionUser, fenBefore);
         
-        // Clear PV analysis after grading to prevent stale data
+
         sessionUser.storedanalysisPv = null;
         
         res.json({
