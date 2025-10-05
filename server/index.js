@@ -39,7 +39,11 @@
     next();
     });
 
-const allowedOrigin = process.env.APP_API_URL && process.env.APP_API_URL.replace(/\/+$/, '');
+const allowedOrigins = [
+  'https://chessm8.me',
+  'https://chess-mate-7n7x.onrender.com',
+  'http://localhost:3000'
+];
 
 app.use((req, res, next) => {
   if (!allowedOrigin) {
