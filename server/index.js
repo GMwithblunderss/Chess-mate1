@@ -31,7 +31,7 @@
 
     const app = express();
     app.set('trust proxy', 1);
-    const PORT = process.env.port || 5000;
+    const PORT = process.env.PORT|| 5000;
 
     app.use((req, res, next) => {
     res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
