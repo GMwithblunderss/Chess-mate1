@@ -13,6 +13,7 @@ import UniqueSidebars from "../components/verticalsidebar.jsx";
 import { prewarmStockfish } from '../wasmanalysis.js';
 import { API_URL } from '../pathconfig.js';
 
+
 const Analytics = () => {
     const location = useLocation();
     const gameDataRef = useRef(null);
@@ -25,6 +26,7 @@ const Analytics = () => {
         return state;
     }, [location.state]);
 
+
     if (!gameData) {
         return (
             <div className="analytics-loading-container">
@@ -33,13 +35,16 @@ const Analytics = () => {
         );
     }
 
+
     if (gameDataRef.current?.key !== gameData.key) {
         gameDataRef.current = gameData;
         return <AnalyticsCore key={gameData.key} gameData={gameData} />;
     }
 
+
     return <AnalyticsCore key={gameData.key} gameData={gameData} />;
 };
+
 
 const AnalyticsCore = ({ gameData }) => {
     const {
@@ -48,6 +53,7 @@ const AnalyticsCore = ({ gameData }) => {
         userrating, opprating, userusername, oppusername, whiteacpl,
         blackacpl, isWhite
     } = gameData;
+
 
     const [Count, setCount] = useState(0);
     const [arrows, setarrows] = useState([]);
@@ -74,12 +80,19 @@ const AnalyticsCore = ({ gameData }) => {
     const stockfishServiceRef = useRef(null);
     const [lastPvMove, setLastPvMove] = useState(null);
     const [pvArrows, setPvArrows] = useState([]);
+    
+    const [mainChess, setMainChess] = useState(null);
+    const [customMainFen, setCustomMainFen] = useState(null);
+    const [isCustomMain, setIsCustomMain] = useState(false);
+    const [mainGrade, setMainGrade] = useState(null);
+    const [mainEvaluation, setMainEvaluation] = useState(null);
+    const [isMainAnalyzing, setIsMainAnalyzing] = useState(false);
+    const [mainArrows, setMainArrows] = useState([]);
+
 
     const pvBoardRef = useRef(null);
-
-    
-
     const boardRef = useRef(null);
+
 
     const derivedData = useMemo(() => {
         const chess = new Chess();
@@ -93,6 +106,7 @@ const AnalyticsCore = ({ gameData }) => {
             }
         });
 
+
         const fromSquares = [];
         const toSquares = [];
         for (const move of bestmoves) {
@@ -105,6 +119,7 @@ const AnalyticsCore = ({ gameData }) => {
             }
         }
 
+
         const tochess = new Chess();
         const toSquare = [];
         for (const moved of moves) {
@@ -116,13 +131,16 @@ const AnalyticsCore = ({ gameData }) => {
             }
         }
 
+
         return { fens, fromSquares, toSquares, toSquare };
     }, [moves, bestmoves]);
+
 
     useEffect(() => {
         const timer = setTimeout(() => setShowIcon(true), 3000);
         return () => clearTimeout(timer);
     }, []);
+
 
 useEffect(() => {
     const initStockfish = async () => {
@@ -130,6 +148,19 @@ useEffect(() => {
     };
     initStockfish();
 }, []);
+
+
+useEffect(() => {
+    if (!isCustomMain) {
+        const safeCount = Math.min(Math.max(Count, 0), derivedData.fens.length - 1);
+        const fen = derivedData.fens[safeCount];
+        setCustomMainFen(fen);
+        setMainChess(new Chess(fen));
+        setMainGrade(null);
+        setMainEvaluation(null);
+        setMainArrows([]);
+    }
+}, [Count, derivedData.fens, isCustomMain]);
 
 
 useEffect(() => {
@@ -141,10 +172,9 @@ useEffect(() => {
         
         setCustomPvFen(fen);
         setIsCustomPv(false);
-        
-
     }
 }, [pvtrying, pvindex, pvframe, pvfen]);
+
 
 useEffect(() => {
     if (!pvBoardRef.current || !pvtrying) return;
@@ -156,18 +186,12 @@ useEffect(() => {
 }, [pvtrying]);
 
 
-
-
-
-
-
-
-
     useEffect(() => {
         const handleResize = () => setWindowWidth(window.innerWidth);
         window.addEventListener("resize", handleResize);
         return () => window.removeEventListener("resize", handleResize);
     }, []);
+
 
     useEffect(() => {
         if (!boardRef.current) return;
@@ -177,6 +201,7 @@ useEffect(() => {
         observer.observe(boardRef.current);
         return () => observer.disconnect();
     }, []);
+
 
     useEffect(() => {
         try {
@@ -189,13 +214,15 @@ useEffect(() => {
         }
     }, [pgn]);
 
+
     useEffect(() => {
         const arrowcount = Count - 1;
         if (arrowcount >= 5 &&
             arrowcount < derivedData.fromSquares.length &&
             derivedData.fromSquares[arrowcount] &&
             derivedData.toSquares[arrowcount] && 
-            !pvtrying) {
+            !pvtrying &&
+            !isCustomMain) {
             setarrows([{
                 startSquare: derivedData.fromSquares[arrowcount],
                 endSquare: derivedData.toSquares[arrowcount],
@@ -204,16 +231,17 @@ useEffect(() => {
         } else {
             setarrows([]);
         }
-    }, [Count, derivedData.fromSquares, derivedData.toSquares, pvtrying]);
+    }, [Count, derivedData.fromSquares, derivedData.toSquares, pvtrying, isCustomMain]);
 
 
 useEffect(() => {
     if (!pvtrying || !pvfen.length || isCustomPv) return;
 
+
     const interval = setInterval(() => {
         setpvframe(prev => {
             const currentpv = pvfen[pvindex - 1] || [];
-            const maxFrame = Math.min(4, Math.min(13, currentpv.length)) - 1;
+            const maxFrame = Math.min(5, Math.min(13, currentpv.length)) - 1;
             const newFrame = prev < maxFrame ? prev + 1 : prev;
             if (newFrame === prev) {
                 clearInterval(interval);
@@ -226,12 +254,12 @@ useEffect(() => {
 }, [pvtrying, pvfen, pvindex, isCustomPv]);
 
 
-
 useEffect(() => {
     if (!pvtrying) {
         setPvArrows([]);
     }
 }, [pvtrying]);
+
 
 useEffect(() => {
     if (!isCustomPv) {
@@ -240,30 +268,186 @@ useEffect(() => {
 }, [isCustomPv]);
 
 
+useEffect(() => {
+    if (!isCustomMain) {
+        setMainArrows([]);
+    }
+}, [isCustomMain]);
+
+
     function acplToAccuracy(acpl) {
         const k = 0.005;
         let acc = 100 * Math.exp(-k * acpl);
         return parseFloat(acc.toFixed(2));
     }
 
+
     const whiteaccuracy = acplToAccuracy(whiteacpl);
     const blackaccuracy = acplToAccuracy(blackacpl);
 
+
     const handlecount = (value) => {
         setCount(value);
+        setIsCustomMain(false);
+        setMainGrade(null);
+        setMainEvaluation(null);
+        setMainArrows([]);
         setTimeout(() => setCount(prev => prev + 1), 10);
     };
 
 
+const handleMainPieceDrop = async ({ sourceSquare, targetSquare, piece }) => {
+    if (!mainChess || pvtrying) {
+        return false;
+    }
 
 
+    try {
+        const fenBefore = mainChess.fen();
+        const testChess = new Chess(fenBefore);
+        
+        const move = testChess.move({
+            from: sourceSquare,
+            to: targetSquare,
+            promotion: 'q'
+        });
 
+
+        if (move === null) {
+            return false;
+        }
+        
+        const newFen = testChess.fen();
+        const uciMove = move.from + move.to + (move.promotion || '');
+        
+        setCustomMainFen(newFen);
+        setIsCustomMain(true);
+        setMainChess(testChess);
+        setIsMainAnalyzing(true);
+        setMainGrade(null);
+        setMainEvaluation(null);
+        
+        await analyzeMainMove(fenBefore, newFen, uciMove);
+
+
+        return true;
+    } catch (error) {
+        console.error("Error in handleMainPieceDrop:", error);
+        setIsMainAnalyzing(false);
+        return false;
+    }
+};
+
+
+const analyzeMainMove = async (fenBefore, fenAfter, uciMove) => {
+    const username = localStorage.getItem("currentUser");
+    
+    try {
+        const stockfishService = stockfishServiceRef.current;
+        if (!stockfishService) {
+            console.warn("Stockfish not ready");
+            setIsMainAnalyzing(false);
+            return;
+        }
+
+
+        const analysisBefore = await stockfishService.analyzeFen(fenBefore, { depth: 15 });
+        const analysisAfter = await stockfishService.analyzeFen(fenAfter, { depth: 15 });
+        
+        if (analysisAfter?.bestmove && analysisAfter.bestmove.length >= 4) {
+            setMainArrows([{
+                startSquare: analysisAfter.bestmove.substring(0, 2),
+                endSquare: analysisAfter.bestmove.substring(2, 4),
+                color: "green"
+            }]);
+        } else {
+            setMainArrows([]);
+        }
+        
+        const bestmove = analysisBefore?.bestmove;
+        let bestFen = null;
+        let bestAnalysis = null;
+        
+        if (bestmove) {
+            const chessForBest = new Chess(fenBefore);
+            const bestMoveResult = chessForBest.move({
+                from: bestmove.slice(0, 2),
+                to: bestmove.slice(2, 4),
+                promotion: bestmove[4] || 'q'
+            });
+            
+            if (bestMoveResult) {
+                bestFen = chessForBest.fen();
+                bestAnalysis = await stockfishService.analyzeFen(bestFen, { depth: 14 });
+            }
+        }
+
+
+        const fens = [fenBefore, fenAfter];
+        const results = [
+            { fen: fenBefore, analysis: analysisBefore },
+            { fen: fenAfter, analysis: analysisAfter }
+        ];
+        const bestfens = [bestFen];
+        const bestresults = [
+            bestFen ? { fen: bestFen, analysis: bestAnalysis } : null
+        ];
+
+
+        const storeResponse = await fetch(`${API_URL}/wasmResultsPv`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                fens,
+                results,
+                bestfens,
+                bestresults,
+                username
+            }),
+        });
+
+
+        if (!storeResponse.ok) {
+            throw new Error("Failed to store WASM results");
+        }
+
+
+        await new Promise(resolve => setTimeout(resolve, 200));
+
+
+        const gradeResponse = await fetch(`${API_URL}/gradePvMove`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                username,
+                playedMove: uciMove,
+                fenBefore
+            }),
+        });
+
+
+        if (gradeResponse.ok) {
+            const gradeData = await gradeResponse.json();
+            setMainGrade(gradeData.grade);
+            setMainEvaluation(gradeData.evaluation);
+        } else {
+            console.error("Grading failed:", await gradeResponse.text());
+        }
+
+
+    } catch (error) {
+        console.error("Error analyzing Main move:", error);
+    } finally {
+        setIsMainAnalyzing(false);
+    }
+};
 
 
 const handlePvPieceDrop = async ({ sourceSquare, targetSquare, piece }) => {
     if (!pvChess) {
         return false;
     }
+
 
     try {
         const fenBefore = pvChess.fen();
@@ -274,6 +458,7 @@ const handlePvPieceDrop = async ({ sourceSquare, targetSquare, piece }) => {
             to: targetSquare,
             promotion: 'q'
         });
+
 
         if (move === null) {
             return false;
@@ -289,9 +474,11 @@ const handlePvPieceDrop = async ({ sourceSquare, targetSquare, piece }) => {
         setPvGrade(null);
         setPvEvaluation(null);
 
+
         
         
         await analyzePvMove(fenBefore, newFen, uciMove);
+
 
         return true;
     } catch (error) {
@@ -300,9 +487,6 @@ const handlePvPieceDrop = async ({ sourceSquare, targetSquare, piece }) => {
         return false;
     }
 };
-
-
-
 
 
 const analyzePvMove = async (fenBefore, fenAfter, uciMove) => {
@@ -315,6 +499,7 @@ const analyzePvMove = async (fenBefore, fenAfter, uciMove) => {
             setIsPvAnalyzing(false);
             return;
         }
+
 
         const analysisBefore = await stockfishService.analyzeFen(fenBefore, { depth: 15 });
         const analysisAfter = await stockfishService.analyzeFen(fenAfter, { depth: 15 });
@@ -343,9 +528,10 @@ const analyzePvMove = async (fenBefore, fenAfter, uciMove) => {
             
             if (bestMoveResult) {
                 bestFen = chessForBest.fen();
-                bestAnalysis = await stockfishService.analyzeFen(bestFen, { depth: 15 });
+                bestAnalysis = await stockfishService.analyzeFen(bestFen, { depth: 14 });
             }
         }
+
 
         const fens = [fenBefore, fenAfter];
         const results = [
@@ -356,6 +542,7 @@ const analyzePvMove = async (fenBefore, fenAfter, uciMove) => {
         const bestresults = [
             bestFen ? { fen: bestFen, analysis: bestAnalysis } : null
         ];
+
 
         const storeResponse = await fetch(`${API_URL}/wasmResultsPv`, {
             method: "POST",
@@ -369,11 +556,14 @@ const analyzePvMove = async (fenBefore, fenAfter, uciMove) => {
             }),
         });
 
+
         if (!storeResponse.ok) {
             throw new Error("Failed to store WASM results");
         }
 
+
         await new Promise(resolve => setTimeout(resolve, 200));
+
 
         const gradeResponse = await fetch(`${API_URL}/gradePvMove`, {
             method: "POST",
@@ -385,6 +575,7 @@ const analyzePvMove = async (fenBefore, fenAfter, uciMove) => {
             }),
         });
 
+
         if (gradeResponse.ok) {
             const gradeData = await gradeResponse.json();
             setPvGrade(gradeData.grade);
@@ -393,15 +584,13 @@ const analyzePvMove = async (fenBefore, fenAfter, uciMove) => {
             console.error("Grading failed:", await gradeResponse.text());
         }
 
+
     } catch (error) {
         console.error("Error analyzing PV move:", error);
     } finally {
         setIsPvAnalyzing(false);
     }
 };
-
-
-
 
 
     const flipboard = () => {
@@ -417,6 +606,7 @@ const analyzePvMove = async (fenBefore, fenAfter, uciMove) => {
             setblackuname(temp);
         }
     };
+
 
 const showtactic = () => {
     if (!pvtrying) {
@@ -447,6 +637,7 @@ const showtactic = () => {
     setpvtrying(prev => !prev);
 };
 
+
 const increase = () => {
     if (pvtrying) {
         const currentpv = pvfen[pvindex - 1] || [];
@@ -462,9 +653,14 @@ const increase = () => {
     } else {
         if (Count < derivedData.fens.length - 1) {
             setCount(Count + 1);
+            setIsCustomMain(false);
+            setMainGrade(null);
+            setMainEvaluation(null);
+            setMainArrows([]);
         }
     }
 };
+
 
 const decrease = () => {
     if (pvtrying) {
@@ -479,6 +675,10 @@ const decrease = () => {
     } else {
         if (Count > 0) {
             setCount(Count - 1);
+            setIsCustomMain(false);
+            setMainGrade(null);
+            setMainEvaluation(null);
+            setMainArrows([]);
         }
     }
 };
@@ -494,25 +694,35 @@ const reset = () => {
         setPvArrows([]); 
     } else {
         setCount(0);
+        setIsCustomMain(false);
+        setMainGrade(null);
+        setMainEvaluation(null);
+        setMainArrows([]);
     }
 };
+
+
     const onstartreview = () => {
         setReviewStarted(true);
         setdisplayansidebar("");
     };
+
 
     function squareCornerPosition(square, boardSize, iconSize = 0.05625 * boardSize, corner = "top-left") {
         const file = square.charCodeAt(0) - 'a'.charCodeAt(0);
         const rank = parseInt(square[1], 10) - 1;
         const squareSize = boardSize / 8;
 
+
         let left = file * squareSize;
         let top = (7 - rank) * squareSize;
+
 
         if (boardOrientation === "black") {
             left = (7 - file) * squareSize;
             top = rank * squareSize;
         }
+
 
         let offsetX = 0.65 * squareSize;
         let offsetY = 0.3125 * squareSize;
@@ -531,19 +741,26 @@ const reset = () => {
         return { left: left + offsetX, top: top + offsetY };
     }
 
+
     const userrealrating = Math.round(((0.5 * userrating) + (0.5 * userevalrating)) / 50) * 50;
     const opprealrating = Math.round(((0.5 * opprating) + (0.5 * oppevalrating)) / 50) * 50;
+
 
     const currentpv = pvfen[pvindex - 1] || [];
     const safeCount = Math.min(Math.max(Count, 0), derivedData.fens.length - 1);
     const evaled = Count > 1 ? Math.floor((Count - 1)) : -1;
 
-    const options = {
-        position: derivedData.fens[safeCount],
-        id: "board",
-        arrows,
-        boardOrientation: boardOrientation
-    };
+
+const options = {
+    position: customMainFen || derivedData.fens[safeCount],
+    id: "board",
+    arrows: isCustomMain ? mainArrows : arrows,
+    boardOrientation: boardOrientation,
+    onPieceDrop: handleMainPieceDrop,
+    draggable: true,
+    draggingPieceGhostStyle: { opacity: 0 }
+};
+
 
 const pvoptions = {
     position: customPvFen || (pvtrying && currentpv ? currentpv[pvframe] || new Chess().fen() : new Chess().fen()),
@@ -555,9 +772,11 @@ const pvoptions = {
     id: "pv-board"
 };
 
+
     return (
         <div className="analytics-root">
             {windowWidth > 768 ? (<Sidebars />) : (<UniqueSidebars />)}
+
 
             <div className="boardplusside">
                 <div className="boardpluseval">
@@ -572,31 +791,102 @@ const pvoptions = {
                         <div className="analytics-board-footer">
                             <footer>{whiteuname}</footer>
                         </div>
-                        {Count > 1 && (() => {
-                            const moveindex = Count - 1;
-                            if (moveindex < 0) return null;
-                            const square = derivedData.toSquare[moveindex];
-                            const grade = grading[moveindex - 1];
-                            const Icon = iconMap[grade];
+                        {(() => {
                             if (pvtrying) return null;
-                            if (!square || !Icon) return null;
-                            const iconSize = 0.05 * boardSize;
-                            const { left, top } = squareCornerPosition(square, boardSize, iconSize, "top-left");
-                            return (
-                                <div
-                                    className="analytics-icon-container"
-                                    style={{
-                                        left: left,
-                                        top: top,
-                                        width: iconSize,
-                                        height: iconSize
-                                    }}
-                                >
-                                    {showIcon && (
-                                        <Icon className="analytics-move-icon-svg" style={{ width: iconSize, height: iconSize }} />
-                                    )}
-                                </div>
-                            );
+                            
+                            if (isCustomMain && mainChess) {
+                                const history = mainChess.history({ verbose: true });
+                                if (history.length === 0) return null;
+                                
+                                const lastMove = history[history.length - 1];
+                                const square = lastMove.to;
+                                
+                                const iconSize = 0.05 * boardSize;
+                                const { left, top } = squareCornerPosition(square, boardSize, iconSize, "top-left");
+                                
+                                if (isMainAnalyzing) {
+                                    return (
+                                        <div
+                                            className="analytics-icon-container"
+                                            style={{
+                                                left: left,
+                                                top: top,
+                                                width: iconSize,
+                                                height: iconSize,
+                                                position: 'absolute'
+                                            }}
+                                        >
+                                            <div 
+                                                className="analytics-loading-spinner"
+                                                style={{ 
+                                                    width: iconSize*0.8, 
+                                                    height: iconSize*0.8,
+                                                    border: `${Math.max(2,iconSize*0.8 * 0.15)}px solid rgba(255, 255, 255, 0.3)`,
+                                                    borderTop: `${Math.max(2, iconSize*0.8 * 0.15)}px solid white`,
+                                                    borderRadius: '50%',
+                                                    animation: 'spin 1s linear infinite',
+                                                    boxSizing: 'border-box'
+                                                }}
+                                            />
+                                        </div>
+                                    );
+                                }
+                                
+                                if (mainGrade) {
+                                    const Icon = iconMap[mainGrade];
+                                    if (!Icon) return null;
+                                    
+                                    return (
+                                        <div
+                                            className="analytics-icon-container"
+                                            style={{
+                                                left: left,
+                                                top: top,
+                                                width: iconSize,
+                                                height: iconSize,
+                                                position: 'absolute'
+                                            }}
+                                        >
+                                            {showIcon && (
+                                                <Icon 
+                                                    className="analytics-move-icon-svg" 
+                                                    style={{ width: iconSize, height: iconSize }} 
+                                                />
+                                            )}
+                                        </div>
+                                    );
+                                }
+                                
+                                return null;
+                            }
+                            
+                            if (Count > 1) {
+                                const moveindex = Count - 1;
+                                if (moveindex < 0) return null;
+                                const square = derivedData.toSquare[moveindex];
+                                const grade = grading[moveindex - 1];
+                                const Icon = iconMap[grade];
+                                if (!square || !Icon) return null;
+                                const iconSize = 0.05 * boardSize;
+                                const { left, top } = squareCornerPosition(square, boardSize, iconSize, "top-left");
+                                return (
+                                    <div
+                                        className="analytics-icon-container"
+                                        style={{
+                                            left: left,
+                                            top: top,
+                                            width: iconSize,
+                                            height: iconSize
+                                        }}
+                                    >
+                                        {showIcon && (
+                                            <Icon className="analytics-move-icon-svg" style={{ width: iconSize, height: iconSize }} />
+                                        )}
+                                    </div>
+                                );
+                            }
+                            
+                            return null;
                         })()}
                     </div>
 {pvtrying && (
@@ -759,5 +1049,6 @@ const pvoptions = {
         </div>
     );
 };
+
 
 export default Analytics;
