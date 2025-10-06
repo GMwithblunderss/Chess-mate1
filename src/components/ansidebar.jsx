@@ -98,11 +98,17 @@ const Ansidebar = ({ handlecount,onIncrease, onDecrease, onReset, movelist, pgn,
       </div>
 
       <div style={styles.controls} >
-      <button style={styles.btnn} onClick={showtactic}>{!pvtrying ? "Show Tactic" : "Hide tactic"}</button>
-        <button style={styles.buttonn} onClick={onIncrease}  >▶</button>
-        <button style={styles.buttonn} onClick={onDecrease} > ◀</button>
-        <button style={styles.buttonn} onClick={onReset} >Reset</button>
-        <button style={styles.buttonn} onClick={onflip} disabled ={pvtrying}>🔁</button>
+        <button style={styles.btnn} onClick={showtactic}>{!pvtrying ? "Show Tactic" : "Hide tactic"}</button>
+        <div style={styles.buttonRow}>
+          <button style={styles.buttonn} onClick={onDecrease} title="Previous">◀</button>
+          <button style={styles.buttonn} onClick={onReset} title="Reset">⟲</button>
+          <button style={styles.buttonn} onClick={onIncrease} title="Next">▶</button>
+          <button style={{...styles.buttonn, ...styles.flipButton}} onClick={onflip} disabled={pvtrying} title="Flip Board">🔁</button>
+        </div>
+      </div>
+
+      <div style={styles.adBox}>
+        <p style={styles.adText}>Advertisement Space</p>
       </div>
     </div>
   );
@@ -147,6 +153,14 @@ const styles = {
     gap: "10px",
     width: "100%",
   },
+  buttonRow: {
+    display: "flex",
+    gap: "8px",
+    width: "100%",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop :"5%",
+  },
   btn :{
     color :"black",
     padding : "0",
@@ -154,20 +168,47 @@ const styles = {
   },
 
   buttonn: {
-    padding: "10px",
-    fontSize: "2rem",
+    padding: "10px 15px",
+    fontSize: "1.5rem",
     borderRadius: "6px",
     border: "1px solid #aaa",
     backgroundColor: "#eee",
     cursor: "pointer",
     transition: "all 0.2s",
-    color :"black"
+    color :"black",
+    flex: "1",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  flipButton: {
+    maxWidth: "60px",
   },
   btnn :{
     color : "white",
     width : "fit-content",
-    screenLeft :" 0px"
-   
+    padding: "5px 10px",
+    fontSize: "0.9rem",
+    borderRadius: "4px",
+    border: "none",
+    backgroundColor: "transparent",
+    cursor: "pointer",
+  },
+  adBox: {
+    width: "100%",
+    height: "100px",
+    backgroundColor: "#fff",
+    border: "1px solid #ddd",
+    borderRadius: "8px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: "48%",
+  },
+  adText: {
+    color: "#999",
+    fontSize: "14px",
+    margin: 0,
   }
 };
 
