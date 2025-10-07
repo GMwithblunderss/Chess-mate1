@@ -10,8 +10,9 @@ let statsweget;
 
 const stats = async(username ,Sessionuser) => {
     try{
+          const API_URL = process.env.APP_API_URL;
         await setUserContext(username);
-        const reply = await axios.get(`http://localhost:5000/pgnd?username=${encodeURIComponent(username)}`)
+        const reply = await axios.get(`${API_URL}/pgnd?username=${encodeURIComponent(username)}`)
         statsweget =  reply.data;
 
         if (statsweget && statsweget.cachedPGNData ) {

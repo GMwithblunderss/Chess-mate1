@@ -131,6 +131,8 @@ function Matchtable({ rf }) {
             blackgradeno: dataweget.blackgradeno,
             pvfen: dataweget.pvfen,
             isWhite,
+            whiteTimeStrings:dataweget.whitetime,
+            blackTimeStrings:dataweget.blacktime,
         },
       });
     } catch {
@@ -139,6 +141,7 @@ function Matchtable({ rf }) {
       setLoading(false);
     }
   };
+
 
   const columns = useMemo(
     () => [

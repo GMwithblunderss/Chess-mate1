@@ -51,7 +51,7 @@ const AnalyticsCore = ({ gameData }) => {
         pgn, moves, bestmoves, grading, userwinpercents, grademovenumber,
         blackgradeno, pvfen, booknames, userevalrating, oppevalrating,
         userrating, opprating, userusername, oppusername, whiteacpl,
-        blackacpl, isWhite
+        blackacpl, isWhite,whiteTimeStrings,blackTimeStrings
     } = gameData;
 
 
@@ -337,6 +337,48 @@ const handleMainPieceDrop = async ({ sourceSquare, targetSquare, piece }) => {
         return false;
     }
 };
+
+
+const formatTime = (timeString) => {
+    if (!timeString) return "0:00";
+    
+    const parts = timeString.split(':');
+    if (parts.length >= 2) {
+        const hours = parseInt(parts[0], 10);
+        const minutes = parseInt(parts[1], 10);
+        const seconds = parseInt(parts[2]?.split('.')[0] || '0', 10);
+        
+        const displayMinutes = minutes.toString().padStart(2, '0');
+        const displaySeconds = seconds.toString().padStart(2, '0');
+        
+        if (hours > 0) {
+            return `${hours}:${displayMinutes}:${displaySeconds}`;
+        }
+        
+        return `${minutes}:${displaySeconds}`;
+    }
+    return "0:00";
+};
+
+
+
+
+
+const getCurrentTimes = () => {
+    const moveIndex = Math.floor(Count / 2);
+    const whiteIndex = isWhite ? moveIndex : moveIndex;
+    const blackIndex = isWhite ? moveIndex : moveIndex;
+    
+    return {
+        whiteTime: formatTime(whiteTimeStrings?.[whiteIndex]),
+        blackTime: formatTime(blackTimeStrings?.[blackIndex])
+    };
+};
+
+
+const { whiteTime, blackTime } = getCurrentTimes();
+//console.log("white times",whiteTime);
+//console.log("white times",blackTime);
 
 
 const analyzeMainMove = async (fenBefore, fenAfter, uciMove) => {
@@ -786,10 +828,16 @@ const pvoptions = {
                     <div className={`analytics-board-container${mainboard === "none" ? " analytics-board-hidden" : ""}`} ref={boardRef}>
                         <div className="analytics-board-header">
                             <header>{blackuname}</header>
+                                    <div className="analytics-time-display">
+                                    {blackTimeStrings && <span className="time-square">{blackTime}</span>}
+                                    </div>
                         </div>
                         <Chessboard options={options} />
                         <div className="analytics-board-footer">
                             <footer>{whiteuname}</footer>
+                                    <div className="analytics-time-display">
+                                         {whiteTimeStrings && <span className="time-square">{whiteTime}</span>}
+                                     </div>
                         </div>
                         {(() => {
                             if (pvtrying) return null;

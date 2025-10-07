@@ -254,9 +254,28 @@ async function throttledGet(url) {
         {
             //res.status(200).send("PGN received succesfully");
             sessionUser.cachedPGNData = null;
-    sessionUser.mArray = [];
-    sessionUser.storedanalysis = [];
+            sessionUser.mArray = [];
+            sessionUser.storedanalysis = [];
             //console.log(sessionUser.npg)
+        const whiteMatch = pgn.match(/\[White\s+"([^"]+)"\]/);
+        const whitePlayer = whiteMatch[1].toLowerCase().trim();
+         const isWhite = (username.toLowerCase().trim() === whitePlayer);
+
+
+    const clkRegex = /\[%clk\s+([\d:\.]+)\]/g;
+    const matches = [...pgn.matchAll(clkRegex)];
+    
+    const whiteTimeStrings = [];
+    const blackTimeStrings = [];
+
+        matches.forEach((match, index) => {
+        if (index % 2 === 0) {
+            whiteTimeStrings.push(match[1]);
+        } else {
+            blackTimeStrings.push(match[1]);
+        }
+    });
+
             if (!sessionUser.npg /*|| !sessionUser.npg.pgn*/) {
             return res.status(400).json({ error: "No PGN data provided yet." });
         }
@@ -278,7 +297,9 @@ async function throttledGet(url) {
                 grademovenumber : bestmoved.grademovenumbers,
                 userwinpercents : bestmoved.userwinpercents,
                 blackgradeno : bestmoved.blackgradeno,
-                pvfen : bestmoved.pvfen}
+                pvfen : bestmoved.pvfen,
+                whitetime :whiteTimeStrings,
+                blacktime: blackTimeStrings}
 
             res.status(200).json(
             sessionUser.cachedPGNData);
