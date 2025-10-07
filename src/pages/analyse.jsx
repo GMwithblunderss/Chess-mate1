@@ -365,13 +365,12 @@ const formatTime = (timeString) => {
 
 
 const getCurrentTimes = () => {
-    const moveIndex = Math.floor(Count / 2);
-    const whiteIndex = isWhite ? moveIndex : moveIndex;
-    const blackIndex = isWhite ? moveIndex : moveIndex;
+    const whiteIndex = Count >= 1 ? Math.floor((Count - 1) / 2) : -1;
+    const blackIndex = Count >= 2 ? Math.floor(Count / 2) - 1 : -1;
     
     return {
-        whiteTime: formatTime(whiteTimeStrings?.[whiteIndex]),
-        blackTime: formatTime(blackTimeStrings?.[blackIndex])
+        whiteTime: whiteIndex >= 0 ? formatTime(whiteTimeStrings?.[whiteIndex]) : formatTime(whiteTimeStrings?.[0]),
+        blackTime: blackIndex >= 0 ? formatTime(blackTimeStrings?.[blackIndex]) : formatTime(blackTimeStrings?.[0])
     };
 };
 
@@ -829,14 +828,14 @@ const pvoptions = {
                         <div className="analytics-board-header">
                             <header>{blackuname}</header>
                                     <div className="analytics-time-display">
-                                    {blackTimeStrings && <span className="time-square">{blackTime}</span>}
+                                    {blackTimeStrings && <span className="time-square time-square-black">{blackTime}</span>}
                                     </div>
                         </div>
                         <Chessboard options={options} />
                         <div className="analytics-board-footer">
                             <footer>{whiteuname}</footer>
                                     <div className="analytics-time-display">
-                                         {whiteTimeStrings && <span className="time-square">{whiteTime}</span>}
+                                        {whiteTimeStrings && <span className="time-square time-square-white">{whiteTime}</span>}
                                      </div>
                         </div>
                         {(() => {
