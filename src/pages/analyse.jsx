@@ -346,22 +346,33 @@ const formatTime = (timeString) => {
     if (parts.length >= 2) {
         const hours = parseInt(parts[0], 10);
         const minutes = parseInt(parts[1], 10);
-        const seconds = parseInt(parts[2]?.split('.')[0] || '0', 10);
+        
+        const secondsPart = parts[2] || '0';
+        const [secondsStr, millisecondsStr] = secondsPart.split('.');
+        const seconds = parseInt(secondsStr, 10);
+        const milliseconds = millisecondsStr ? millisecondsStr.substring(0, 3) : null;
+        
+        const totalSeconds = (hours * 3600) + (minutes * 60) + seconds;
         
         const displayMinutes = minutes.toString().padStart(2, '0');
         const displaySeconds = seconds.toString().padStart(2, '0');
         
+        let timeDisplay = '';
+        
         if (hours > 0) {
-            return `${hours}:${displayMinutes}:${displaySeconds}`;
+            timeDisplay = `${hours}:${displayMinutes}:${displaySeconds}`;
+        } else {
+            timeDisplay = `${minutes}:${displaySeconds}`;
         }
         
-        return `${minutes}:${displaySeconds}`;
+        if (totalSeconds < 20 && milliseconds) {
+            timeDisplay += `.${milliseconds}`;
+        }
+        
+        return timeDisplay;
     }
     return "0:00";
 };
-
-
-
 
 
 const getCurrentTimes = () => {
