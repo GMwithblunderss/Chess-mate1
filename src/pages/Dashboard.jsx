@@ -23,7 +23,7 @@ const Dashboard = ({name}) =>
             <div className="griddiv">
                 <Dboardcard heading={"Opening Stats"} route = {"/Opening"} />
                 <Dboardcard heading ={"Game Phase"} route ={'/Stage'}/>
-                <Dboardcard heading ={"Game Style"} route ={'/Playerstyle'}/>
+                {/* <Dboardcard heading ={"Game Style"} route ={'/Playerstyle'}/> */}
                 <Dboardcard heading ={"Piece Analysis"} route ={'/PieceAnalysis'}/>
                 { /*<Dboardcard />
                 <Dboardcard />*/}
