@@ -18,6 +18,69 @@ function addDefaultPromotion(move, chess) {
   return move;
 }
 
+function isForcedMaterialLoss(fenBefore, playedMove) {
+  try {
+    const game = new Chess(fenBefore);
+    const ourColor = game.turn();
+    const opponentColor = ourColor === 'w' ? 'b' : 'w';
+    const board = game.board();
+    
+    const getPieceValue = (type) => {
+      const values = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
+      return values[type] || 0;
+    };
+    
+    let threatenedPieces = [];
+    
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 8; col++) {
+        const square = board[row][col];
+        if (!square || square.color !== ourColor) continue;
+        
+        const squareName = String.fromCharCode(97 + col) + (8 - row);
+        const attackers = game.attackers(opponentColor, squareName);
+        const defenders = game.attackers(ourColor, squareName);
+        
+        if (attackers.length > 0) {
+          const netThreat = attackers.length - defenders.length;
+          const pieceValue = getPieceValue(square.type);
+          
+          if (netThreat > 0 || (netThreat === 0 && pieceValue >= 3)) {
+            threatenedPieces.push({
+              square: squareName,
+              value: pieceValue,
+              netThreat: netThreat
+            });
+          }
+        }
+      }
+    }
+    
+    const moveFrom = playedMove.slice(0, 2);
+    const movedPiece = threatenedPieces.find(p => p.square === moveFrom);
+    
+    if (!movedPiece && threatenedPieces.length === 0) {
+      return { isForced: false };
+    }
+    
+    if (threatenedPieces.length >= 2) {
+      return { isForced: true, reason: "fork" };
+    }
+    
+    if (movedPiece && movedPiece.netThreat > 0) {
+      const move = game.move({ from: moveFrom, to: playedMove.slice(2, 4), promotion: playedMove[4] });
+      if (move && move.captured) {
+        return { isForced: true, reason: "desperado" };
+      }
+    }
+    
+    return { isForced: false };
+    
+  } catch (e) {
+    return { isForced: false };
+  }
+}
+
 function isOnlyLegalMove(fen) {
   try {
     const game = new Chess(fen);
@@ -513,14 +576,12 @@ const lastWin = isWhiteMove ? userwinpercents[i-1] : 100 - userwinpercents[i-1];
 const currentWin = isWhiteMove ? userwinpercents[i] : 100 - userwinpercents[i];
 
           const sacrificeResult = getIsPieceSacrifice(fenBefore, playedMove, bestLine);
-      const defensiveResult = isDefensiveMove(fenBefore, playedMove);
       const previousMoveCheck = canBeBrilliantAfterMistake(actualgrading, i-1);
       const forcedKingMove = isForcedKingMove(fenBefore, playedMove);
       const onlyMove = isOnlyLegalMove(fenBefore);
       const winPercentCheck = meetsMinimumWinPercent(currentWin);
-      const directForkResponse = isDirectForkResponse(fenBefore, playedMove);
-     const blockForFork = directForkResponse.isDirectForkResponse || forkSituation.isFork;
-      const isSacrifice = sacrificeResult.isSacrifice && !defensiveResult.isDefensive;
+      const forcedLoss = isForcedMaterialLoss(fenBefore, playedMove);
+      const isSacrifice = sacrificeResult.isSacrifice && !forcedLoss.isForced;
       const winDropOk = isWhiteMove ? lastWin - currentWin >= -1.5 : lastWin - currentWin>=-1.5;
       const forkSituation = isForkSituation(fenBefore);
       const isPlayedMoveBest = playedMove === bestUciMoves[i - 1];
@@ -538,7 +599,7 @@ function skipBrilliant(winPercentBefore, winPercentAfter) {
   return false;
 }
     const skipbrilliant =skipBrilliant(lastWin ,currentWin);
-    if (isSacrifice && winDropOk && !skipbrilliant && previousMoveCheck.canBeBrilliant && !forcedKingMove.isForcedKingMove && !onlyMove.isOnlyMove && winPercentCheck.meetsMinimum && !blockForFork && isPlayedMoveBest) {
+    if (isSacrifice && winDropOk && !skipbrilliant && previousMoveCheck.canBeBrilliant && !forcedKingMove.isForcedKingMove && !onlyMove.isOnlyMove && winPercentCheck.meetsMinimum  && isPlayedMoveBest) {
       //console.log(`✅ Brilliant triggered at move ${i}`);
       actualgrading[i-1] = "Brilliant";
     }
