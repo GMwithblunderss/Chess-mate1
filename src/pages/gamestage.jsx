@@ -120,7 +120,7 @@ const PhaseStats = () => {
       unforced_errors: stats[p('unforced_errors')],
       excellent: stats[p('excellent')],
       special: stats[p('development_moves')] ?? stats[p('tactical_moves')] ?? stats[p('technique_score')],
-      specialLabel: phase === 'opening' ? 'Dev. Moves' : phase === 'middlegame' ? 'Tactical Moves' : 'Technique',
+      specialLabel: phase === 'opening' ? 'Dev. Moves' : phase === 'middlegame' ? 'Tactical Moves' : 'Conversion %',
       initiative: stats[p('initiative_score')],
       adv_conversion: stats[p('advantage_conversion_accuracy')],
       defense: stats[p('defensive_hold_accuracy')],
