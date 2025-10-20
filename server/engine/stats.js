@@ -1405,6 +1405,51 @@ const saveOpeningMetrics = async (username, openingName, openingData, gameInfo, 
 
 
 
+    const isInitiativeMove = (moveData, moves, grades, evals, captures, isWhite) => {
+    if (['Blunder', 'Mistake'].includes(moveData.grade)) return false;
+    
+    const nextIdx = moveData.index + 1;
+    if (nextIdx >= moves.length) return false;
+    
+    const oppMove = moves[nextIdx];
+    const oppGrade = grades[nextIdx - 1];
+    
+    const oppDefensive = oppMove.length <= 3 && !oppMove.includes('x') && !oppMove.includes('+') && !['Brilliant', 'Great', 'Best'].includes(oppGrade);
+    const oppForcedDefend = oppGrade && ['Forced', 'Good', 'Okay'].includes(oppGrade) && !oppMove.includes('x');
+    
+    const evalBefore = moveData.evalBefore;
+    const evalAfter = evals && evals[nextIdx] !== undefined ? evals[nextIdx] : evalBefore;
+    
+    function getWinPercentageFromCp(cp) {
+        if (typeof cp === "string" && cp.startsWith("mate in")) {
+            const mateValue = parseInt(cp.split(" ")[2], 10);
+            return mateValue > 0 ? 100 : 0;
+        }
+        const clamped = Math.max(-1000, Math.min(1000, cp));
+        const MULTIPLIER = -0.00368208;
+        const winChances = 2 / (1 + Math.exp(MULTIPLIER * clamped)) - 1;
+        return 50 + 50 * winChances;
+    }
+    
+    let userWinBefore = getWinPercentageFromCp(evalBefore);
+    let userWinAfter = getWinPercentageFromCp(evalAfter);
+    
+    if (!isWhite) {
+        userWinBefore = 100 - userWinBefore;
+        userWinAfter = 100 - userWinAfter;
+    }
+    
+    const pressureGained = (userWinAfter - userWinBefore) > 5;
+    const createdThreat = (oppDefensive || oppForcedDefend) && pressureGained;
+    const directAttack = (moveData.move.includes('x') || moveData.move.includes('+')) && ['Brilliant', 'Great', 'Best', 'Good'].includes(moveData.grade) && nextIdx < captures.length && captures[nextIdx] === 'no capture';
+    const positionalThreat = ['Brilliant', 'Great', 'Best'].includes(moveData.grade) && pressureGained && oppDefensive;
+    
+    return createdThreat || directAttack || positionalThreat;
+};
+
+
+
+
 
 
 
@@ -1540,12 +1585,10 @@ const calculatePhaseAggregatedStats = (moves, grades, cploss, evals, isWhite,use
                 unforcedErrors++;
             }
 
-            const move = moveData.move;
-            const isForcing = move.includes('x') || move.includes('+') || move.includes('#');
-            const isStrongPositional = ['Brilliant', 'Great', 'Best'].includes(moveData.grade);
-            if (isForcing || isStrongPositional) {
-                proactiveMoves++;
-            }
+if (isInitiativeMove(moveData, moves, grades, evals, captures, isWhite)) {
+    proactiveMoves++;
+}
+
         });
 
         const avgCpLoss = totalCpLoss / phaseMoves.length;
