@@ -1603,36 +1603,16 @@ const calculatePhaseAggregatedStats = (moves, grades, cploss, evals, isWhite,use
                 return isKnightDev || isBishopDev || isCastling || isCentralPawn;
             }).length : 0;
             
-        const endgameTechnique = phaseName === 'endgame' ? (() => {
-            if (phaseMoves.length <= 8) return 0;
-            
-            let techniqueScore = 0;
-            let maxScore = 0;
-            
-            phaseMoves.forEach(moveData => {
-                const move = moveData.move;
-                const grade = moveData.grade;
-                const cpLoss = moveData.cpLoss;
-                
-                maxScore += 10;
-                
-                if (grade === 'Brilliant') techniqueScore += 10;
-                else if (grade === 'Great') techniqueScore += 10;
-                else if (grade === 'Best') techniqueScore += 10;
-                else if (grade === 'Good' && cpLoss < 10) techniqueScore += 8;
-                else if (grade === 'Okay') techniqueScore += 6;
-                else if (cpLoss < 45) techniqueScore += 3;
-                
-                if (move.startsWith('K') && ['Good', 'Best', 'Great', 'Brilliant'].includes(grade)) {
-                    techniqueScore += 2;
-                }
-                if (move.includes('=') || (move.match(/[a-h][67]/))) {
-                    techniqueScore += 3;
-                }
-            });
-            
-            return Math.round((techniqueScore / maxScore) * 1000) / 100;
-        })() : 0;
+const endgameTechnique = phaseName === 'endgame' ? (() => {
+  if (phaseMoves.length < 8) return 0;
+  
+  const movesWhileWinning = winningMoves.length;
+  const winningPercentage = (movesWhileWinning / phaseMoves.length) * 100;
+  
+  if (winningPercentage < 70) return 0;
+  
+  return gameInfo.result === 'win' ? 100 : 0;
+})() : 0;
 
 
         return {
