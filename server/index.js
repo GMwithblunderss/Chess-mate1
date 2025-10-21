@@ -733,11 +733,13 @@ app.post("/gradePvMove", async (req, res) => {
 }
 else{
     app.use(express.static(path.join(__dirname, '../build')));
+    
+app.get(/^\/(?!username|pgn|statsuser|pgnfromuser|analyzewithstockfish|analyzewithstockfishuser|realtimepvupdate).*$/, (req, res) => {
+  res.sendFile(path.join(__dirname, '../build', 'index.html'));
+});
 
-    app.get(/.*/, (req, res) => {
-    res.sendFile(path.join(__dirname, '../build', 'index.html'));
-    });
 }
+
 
     app.listen(PORT, () => {
         console.log(`Server running on http://localhost:${PORT}`);
