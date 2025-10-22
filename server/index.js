@@ -734,9 +734,9 @@ app.post("/gradePvMove", async (req, res) => {
 else{
     app.use(express.static(path.join(__dirname, '../build')));
     
-app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../build', 'index.html'));
-});
+    app.get('/{*splat}', (req, res) => {
+        res.sendFile(path.join(__dirname, '../build', 'index.html'));
+    });
 
 }
 
