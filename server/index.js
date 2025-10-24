@@ -732,14 +732,14 @@ app.post("/gradePvMove", async (req, res) => {
   );
 }
 else{
-    app.use(express.static(path.join(__dirname, '../build')));
-    
-    app.get('/{*splat}', (req, res) => {
-        res.sendFile(path.join(__dirname, '../build', 'index.html'));
-    });
+    app.use(express.static(path.join(__dirname, '../build')));   
+);
 
 }
 
+    app.get('/{*splat}', (req, res) => {
+        res.sendFile(path.join(__dirname, '../build', 'index.html'));
+    }
 
     app.listen(PORT, () => {
         console.log(`Server running on http://localhost:${PORT}`);
